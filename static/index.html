@@ -1,0 +1,252 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resume match scorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #edf0f4; --sheet: #fff; --ink: #18212b; --soft: #4b5766; --line: #d5dbe3;
+    --accent: #2450e6; --mark: #ffe066;
+    --ok: #12704f; --ok-bg: #e3f4ec; --mid: #a86a00; --gap: #b8322a; --gap-bg: #fbe9e7;
+    --display: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+    --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 16px/1.55 var(--body); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 44px 20px 90px; }
+  h1 { font: 800 clamp(2rem, 4.2vw, 3rem)/1.05 var(--display); letter-spacing: -0.02em; margin: 0 0 12px; max-width: 18ch; }
+  h2, h3 { font-family: var(--display); margin: 0; }
+  h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 12px; }
+  h3 { font-size: 1.25rem; font-weight: 600; margin-bottom: 14px; }
+  .lede { color: var(--soft); max-width: 58ch; margin: 0 0 28px; }
+  .inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 760px) { .inputs { grid-template-columns: 1fr; } }
+  .panel { background: var(--sheet); border: 1px solid var(--line); border-radius: 8px; padding: 20px; }
+  textarea { width: 100%; min-height: 230px; padding: 12px; border: 1px solid var(--line); border-radius: 6px;
+    font: inherit; resize: vertical; color: inherit; background: #fff; }
+  textarea:disabled { background: #f3f5f8; color: var(--soft); }
+  .row { display: flex; align-items: center; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+  .btn { font: 600 1rem var(--body); border-radius: 6px; padding: 10px 18px; cursor: pointer; border: 1px solid var(--line); background: #fff; color: var(--ink); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; padding: 13px 28px; }
+  .btn:disabled { opacity: .6; cursor: progress; }
+  .link { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; }
+  .fileinfo { margin: 10px 0 0; font-size: .9rem; color: var(--soft); }
+  .drop { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 4px;
+    min-height: 230px; border: 2px dashed var(--line); border-radius: 6px; padding: 20px; cursor: pointer; }
+  .drop span { color: var(--soft); font-size: .9rem; }
+  .drop.over { border-color: var(--accent); background: #f3f6ff; }
+  .drop:focus-within, .btn:focus-visible, .link:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .sr { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .actions { display: flex; align-items: center; gap: 16px; margin-top: 20px; }
+  #status { color: var(--soft); }
+  .error { margin-top: 16px; padding: 12px 16px; background: var(--gap-bg); border-left: 4px solid var(--gap); border-radius: 4px; color: #7c1f19; }
+
+  #results { margin-top: 36px; display: grid; gap: 20px; }
+  .hero { display: grid; grid-template-columns: auto 1fr; gap: 12px 40px; align-items: center; }
+  @media (max-width: 640px) { .hero { grid-template-columns: 1fr; } }
+  .score { font: 800 clamp(4.5rem, 12vw, 7rem)/.95 var(--display); letter-spacing: -0.03em;
+    background: linear-gradient(transparent 64%, var(--mark) 64% 92%, transparent 92%); display: inline-block; }
+  .outof { font: 600 1.25rem var(--display); color: var(--soft); margin-left: 6px; }
+  .stars { position: relative; display: inline-block; font-size: 1.7rem; letter-spacing: 3px; line-height: 1; margin-top: 10px; }
+  .stars-bg { color: #cfd6df; }
+  .stars-fg { position: absolute; left: 0; top: 0; overflow: hidden; white-space: nowrap; color: #e0a100; }
+  .verdict { font: 600 1.5rem var(--display); margin: 0 0 6px; }
+  .hero p { margin: 0; color: var(--soft); max-width: 60ch; }
+  .metric { margin-bottom: 16px; }
+  .metric-top { display: flex; justify-content: space-between; gap: 12px; font-weight: 600; }
+  .metric small { display: block; color: var(--soft); font-weight: 400; }
+  .bar { height: 8px; background: #e6eaf0; border-radius: 4px; margin-top: 6px; overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 4px; transition: width .5s ease; }
+  .hi { background: var(--ok); } .mid { background: #d18b00; } .lo { background: var(--gap); }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .label { font-weight: 600; margin: 14px 0 8px; }
+  .label:first-of-type { margin-top: 0; }
+  .chip { display: inline-block; padding: 3px 11px; border-radius: 999px; font-size: .875rem; margin: 0 6px 6px 0; }
+  .chip.ok { background: var(--ok-bg); color: var(--ok); }
+  .chip.gap { border: 1px dashed var(--gap); color: var(--gap); background: #fff; padding: 2px 10px; }
+  .chip.plain { background: #eef1f5; color: var(--soft); }
+  .none { color: var(--soft); font-size: .9rem; }
+  ul.tips { margin: 0; padding-left: 20px; } ul.tips li { margin-bottom: 8px; }
+  dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 20px; margin: 0; }
+  dl.facts dt { color: var(--soft); } dl.facts dd { margin: 0; overflow-wrap: anywhere; }
+  .doc { white-space: pre-wrap; font-size: .9rem; line-height: 1.65; max-height: 460px; overflow: auto;
+    border: 1px solid var(--line); border-radius: 6px; padding: 18px; background: #fff; }
+  mark { background: var(--mark); color: var(--ink); padding: 0 2px; border-radius: 2px; }
+  .note { color: var(--soft); font-size: .9rem; margin: 0 0 12px; }
+  @media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <h1>Score a resume against a job description</h1>
+  <p class="lede">Add the job description and the resume. You get a score out of 100, a star rating, and a list of what is missing.</p>
+
+  <div class="inputs">
+    <section class="panel">
+      <h2>Job description</h2>
+      <textarea id="jd" aria-label="Job description text" placeholder="Paste the job description here"></textarea>
+      <div class="row">
+        <button type="button" class="btn" id="jdPick">Upload file</button>
+        <button type="button" class="link" id="jdSample">Use a sample</button>
+        <input type="file" id="jdFile" accept=".pdf,.docx,.txt" hidden>
+      </div>
+      <p class="fileinfo" id="jdFileInfo" hidden></p>
+    </section>
+
+    <section class="panel">
+      <h2>Resume</h2>
+      <label class="drop" id="drop" for="resumeFile">
+        <input class="sr" type="file" id="resumeFile" accept=".pdf,.docx,.txt">
+        <strong id="dropTitle">Drop a resume here or choose a file</strong>
+        <span id="dropHint">PDF, DOCX or TXT, up to 5 MB</span>
+      </label>
+    </section>
+  </div>
+
+  <div class="actions">
+    <button type="button" class="btn primary" id="go">Score resume</button>
+    <span id="status" role="status"></span>
+  </div>
+  <div class="error" id="error" role="alert" hidden></div>
+  <section id="results" hidden></section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const SAMPLE_JD = `Backend Developer (Python)
+
+We are looking for a backend developer with 2+ years of experience building web services. You will design REST APIs using FastAPI or Flask, work with PostgreSQL and MongoDB, and deploy with Docker on AWS.
+
+Requirements:
+- Bachelor's degree in Computer Science or a related field
+- Strong Python and SQL skills
+- Experience with Git, CI/CD pipelines and unit testing
+- Familiarity with React is a plus
+- Good communication and problem solving skills`;
+
+let resumeFile = null, jdFile = null;
+
+function setResume(f) {
+  resumeFile = f || null;
+  $("dropTitle").textContent = f ? f.name : "Drop a resume here or choose a file";
+  $("dropHint").textContent = f ? Math.max(1, Math.round(f.size / 1024)) + " KB. Choose another file to replace it." : "PDF, DOCX or TXT, up to 5 MB";
+}
+function setJdFile(f) {
+  jdFile = f || null;
+  $("jd").disabled = !!f;
+  const info = $("jdFileInfo");
+  info.hidden = !f;
+  info.innerHTML = f ? esc(f.name) + ' is used instead of the pasted text. <button type="button" class="link" id="jdRemove">Remove</button>' : "";
+  if (f) $("jdRemove").addEventListener("click", () => { $("jdFile").value = ""; setJdFile(null); });
+}
+
+$("resumeFile").addEventListener("change", (e) => setResume(e.target.files[0]));
+$("jdPick").addEventListener("click", () => $("jdFile").click());
+$("jdFile").addEventListener("change", (e) => setJdFile(e.target.files[0]));
+$("jdSample").addEventListener("click", () => { $("jd").value = SAMPLE_JD; setJdFile(null); });
+
+const drop = $("drop");
+["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => { if (e.dataTransfer.files.length) setResume(e.dataTransfer.files[0]); });
+
+function showError(msg) { const el = $("error"); el.textContent = msg; el.hidden = !msg; }
+
+$("go").addEventListener("click", async () => {
+  showError("");
+  if (!resumeFile) return showError("Add a resume first.");
+  if (!jdFile && $("jd").value.trim().split(/\s+/).length < 15) return showError("Add a job description: paste the full text or upload a file.");
+
+  const fd = new FormData();
+  fd.append("resume", resumeFile);
+  fd.append("jd_text", $("jd").value);
+  if (jdFile) fd.append("jd_file", jdFile);
+
+  $("go").disabled = true; $("status").textContent = "Scoring…";
+  try {
+    const res = await fetch("/api/analyze", { method: "POST", body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const d = data.detail;
+      throw new Error(typeof d === "string" ? d : "The server could not score these files. Check the file types and try again.");
+    }
+    render(data);
+  } catch (err) {
+    showError(err.message || "Could not reach the server.");
+  } finally {
+    $("go").disabled = false; $("status").textContent = "";
+  }
+});
+
+const chips = (list, cls) => list.length ? list.map((x) => `<span class="chip ${cls}">${esc(x)}</span>`).join("") : "";
+const none = (t) => `<span class="none">${t}</span>`;
+
+function highlight(text, terms) {
+  const safe = esc(text);
+  if (!terms.length) return safe;
+  try {
+    const alt = terms.map((t) => esc(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "[\\s\\-]+")).join("|");
+    const rx = new RegExp("(?<![A-Za-z0-9+#.&])(" + alt + ")(?![A-Za-z+#])", "gi");
+    return safe.replace(rx, "<mark>$1</mark>");
+  } catch (e) { return safe; }
+}
+
+function render(r) {
+  const c = r.candidate, ex = r.experience, ed = r.education;
+  const bars = r.breakdown.map((b) => {
+    const ratio = b.score / b.max, cls = ratio >= 0.7 ? "hi" : ratio >= 0.4 ? "mid" : "lo";
+    return `<div class="metric"><div class="metric-top"><span>${esc(b.label)}</span><span>${b.score} / ${b.max}</span></div>
+      <small>${esc(b.detail)}</small><div class="bar"><i class="${cls}" style="width:${Math.round(ratio * 100)}%"></i></div></div>`;
+  }).join("");
+  const facts = [
+    ["Name", c.name], ["Email", c.email], ["Phone", c.phone],
+    ["Links", c.links.length ? c.links.join(", ") : null],
+    ["Experience", ex.detected_years + " years found" + (ex.required_years ? ", job asks for " + ex.required_years + "+" : "")],
+    ["Education", ed.found ? ed.found + (ed.required ? ", job asks for " + ed.required : "") : "Not found"],
+    ["Length", r.word_count + " words"],
+  ].filter((f) => f[1]).map((f) => `<dt>${f[0]}</dt><dd>${esc(f[1])}</dd>`).join("");
+
+  $("results").innerHTML = `
+    <div class="panel hero">
+      <div>
+        <div><span class="score">${Math.round(r.score)}</span><span class="outof">/100</span></div>
+        <div class="stars" role="img" aria-label="${r.stars} out of 5 stars">
+          <span class="stars-bg">★★★★★</span><span class="stars-fg" style="width:${r.stars / 5 * 100}%">★★★★★</span>
+        </div>
+      </div>
+      <div><p class="verdict">${esc(r.rating)}</p><p>${esc(r.summary)}</p></div>
+    </div>
+    <div class="panel"><h3>How the score adds up</h3>${bars}</div>
+    <div class="cols">
+      <div class="panel"><h3>Skills</h3>
+        <div class="label">Found in the resume</div>${chips(r.skills.matched, "ok") || none("None of the skills in the job description were found.")}
+        <div class="label">Missing from the resume</div>${chips(r.skills.missing, "gap") || none("Nothing missing.")}
+        <div class="label">Also on the resume</div>${chips(r.skills.extra, "plain") || none("No other known skills found.")}
+      </div>
+      <div class="panel"><h3>Key terms</h3>
+        <div class="label">Found in the resume</div>${chips(r.keywords.matched, "ok") || none("None found.")}
+        <div class="label">Missing from the resume</div>${chips(r.keywords.missing, "gap") || none("Nothing missing.")}
+      </div>
+    </div>
+    <div class="cols">
+      <div class="panel"><h3>What to improve</h3>${r.suggestions.length ? `<ul class="tips">${r.suggestions.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : none("No major gaps found.")}</div>
+      <div class="panel"><h3>What was read from the resume</h3><dl class="facts">${facts}</dl></div>
+    </div>
+    <div class="panel"><h3>Resume text with matches marked</h3>
+      <p class="note">Marked words appear in both the resume and the job description.${r.resume_truncated ? " Showing the first 8,000 characters." : ""}</p>
+      <div class="doc">${highlight(r.resume_text, r.highlight_terms)}</div>
+    </div>`;
+  $("results").hidden = false;
+  $("results").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+</script>
+</body>
+</html>
